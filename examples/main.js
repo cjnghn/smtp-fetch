@@ -8,6 +8,7 @@ async function main() {
   await client.connect();
 
   console.log(await client.ehlo());
+  console.log(await client.quit());
 
   client.close();
 }

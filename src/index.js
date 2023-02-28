@@ -78,6 +78,14 @@ class Client {
     });
   }
 
+  quit() {
+    return new Promise((resolve, reject) => {
+      this.cmd(221, "QUIT")
+        .then(resolve)
+        .catch(reject);
+    })
+  }
+
   _parseCodeLine(reply, expectCode) {
     const lines = reply.split("\r\n");
     let code;
