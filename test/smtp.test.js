@@ -15,39 +15,38 @@ const createTestServer = (port) => {
 };
 
 describe("connect", () => {
-  let c;
-  let s;
+  let client, server;
 
   beforeEach(() => {
-    c = new SMTP("127.0.0.1", DUMMY_PORT);
+    client = new SMTP("127.0.0.1", DUMMY_PORT);
   });
 
   afterEach(async () => {
-    c.close();
-    await s.stop();
+    client.close();
+    await server.stop();
   });
 
   it("should connect to the SMTP server", async () => {
-    s = createTestServer(DUMMY_PORT);
-    s.on("connection", (sock) => {
+    server = createTestServer(DUMMY_PORT);
+    server.on("connection", (sock) => {
       sock.write("220 mx.test.com ESMTP\r\n");
     });
-    await s.start();
+    await server.start();
 
-    const result = await c.connect();
+    const result = await client.connect();
 
     expect(result.code).toBe(220);
     expect(result.message).toBe("mx.test.com ESMTP");
   });
 
   it("should throw when not 220", async () => {
-    s = createTestServer(DUMMY_PORT);
-    s.on("connection", (sock) => {
+    server = createTestServer(DUMMY_PORT);
+    server.on("connection", (sock) => {
       sock.write("300 mx.test.com ESMTP\r\n");
     });
-    await s.start();
+    await server.start();
 
-    await expect(c.connect()).rejects.toThrowError(
+    await expect(client.connect()).rejects.toThrowError(
       new SMTPError("unexpected code: 300")
     );
   });
