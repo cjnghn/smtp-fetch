@@ -3,10 +3,12 @@
 const util = require("util");
 const net = require("net");
 const tls = require("tls");
-const debug = require("debug")("promise-smtp");
+const debug = require("debug")("smtp");
 const { SMTPError, SMTPServerDisconnected } = require("./error");
 
 class SMTP {
+  // A Client represents a client connection to an SMTP server.
+
   constructor(host, port, options = {}, localName = "localhost") {
     this.socket = null;
     this.ext = {};
@@ -27,8 +29,13 @@ class SMTP {
     return new Promise((resolve, reject) => {
       this.socket.on("connect", () => {
         this.socket.once("data", (data) => {
-          debug("connect success: " + data.toString());
-          resolve(this._parseCodeLine(data.toString(), 220));
+          try {
+            debug("connect: " + data.toString());
+            resolve(this.parseCodeLine(data.toString(), 220));
+          } catch (err) {
+            debug("connect error: " + err.message);
+            reject(err);
+          }
         });
       });
 
@@ -43,6 +50,7 @@ class SMTP {
     });
   }
 
+  // Close closes the connection.
   close() {
     if (!this.socket) {
       throw new SMTPServerDisconnected("please run connect() first");
@@ -62,7 +70,7 @@ class SMTP {
       debug("> " + line);
       this.socket.write(line, "utf-8", () => {
         this.socket.once("data", (data) => {
-          resolve(this._parseCodeLine(data.toString(), expectCode));
+          resolve(this.parseCodeLine(data.toString(), expectCode));
         });
       });
     });
@@ -82,6 +90,7 @@ class SMTP {
     return this.cmd(250, "NOOP");
   }
 
+  // hello runs a hello exchange if needed.
   async hello(name) {
     if (!this.didHello) {
       this.didHello = true;
@@ -95,10 +104,14 @@ class SMTP {
     }
   }
 
+  // helo sends the HELO greeting to the server. It should be used only when the
+  // server does not support ehlo.
   async helo(name) {
     return this.cmd(220, "HELO %s", name || this.localName);
   }
 
+  // ehlo sends the EHLO (extended hello) greeting to the server. It
+  // should be the preferred greeting for servers that support it.
   async ehlo(name) {
     const { code, message } = await this.cmd(
       250,
@@ -124,6 +137,8 @@ class SMTP {
     return { code, message };
   }
 
+  // StartTLS sends the STARTTLS command and encrypts all further communication.
+  // Only servers that advertise the STARTTLS extension support this function.
   async startTLS(tlsOptions) {
     // ehlo or ehlo first
     await this.hello();
@@ -148,7 +163,7 @@ class SMTP {
     return this.cmd(221, "QUIT");
   }
 
-  _parseCodeLine(reply, expectCode) {
+  parseCodeLine(reply, expectCode) {
     const lines = reply.split("\r\n");
     let code;
     const resp = [];
@@ -158,6 +173,10 @@ class SMTP {
       if (line.substring(3, 4) != "-") {
         break;
       }
+    }
+
+    if (expectCode !== code) {
+      throw new SMTPError("unexpected code: " + code);
     }
 
     return { code, message: resp.join("\n") };
