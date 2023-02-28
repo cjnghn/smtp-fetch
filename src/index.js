@@ -62,77 +62,65 @@ class Client {
     });
   }
 
-  verify(addr) {
-    return new Promise((resolve, reject) => {
-      this.cmd(250, "VRFY %s", addr).then(resolve).catch(reject);
-    });
+  async verify(addr) {
+    return this.cmd(250, "VRFY %s", addr);
   }
 
-  noop() {
-    return new Promise((resolve, reject) => {
-      this.cmd(250, "NOOP").then(resolve).catch(reject);
-    });
+  async noop() {
+    return this.cmd(250, "NOOP");
   }
 
-  hello(name) {
-    return new Promise((resolve, reject) => {
-      if (!this.didHello) {
-        this.didHello = true;
-        this.ehlo(name).then((resp) => {
-          if (!(200 <= resp.code && resp.code < 300)) {
-            this.helo(name).then((resp2) => {
-              console.log(resp2.code);
-              if (!(200 <= resp2.code && resp2.code < 300)) {
-                reject(new Error("smtp helo error code: " + resp2.code));
-              }
-              resolve();
-            });
-          }
-          resolve();
-        });
+  async hello(name) {
+    if (!this.didHello) {
+      this.didHello = true;
+      let resp = await this.ehlo(name);
+      if (!(200 <= resp.code && resp.code < 300)) {
+        resp = await this.helo(name);
+        if (!(200 <= resp.code && resp.code < 300)) {
+          throw new SMTPError("smtp hello error: " + resp);
+        }
       }
-    });
+    }
   }
 
-  helo(name) {
-    return new Promise((resolve, reject) => {
-      this.cmd(220, "HELO %s", name || this.localName)
-        .then(resolve)
-        .catch(reject);
-    });
+  async helo(name) {
+    return this.cmd(220, "HELO %s", name || this.localName);
   }
 
-  ehlo(name) {
-    return new Promise((resolve, reject) => {
-      this.cmd(250, "EHLO %s", name || this.localName)
-        .then((data) => {
-          const ext = {};
-          const extList = data.message.split("\n");
-          if (extList.length > 1) {
-            extList.shift(); // remove first line
-            for (const line of extList) {
-              const [k, ...v] = line.split(" ");
-              ext[k] = v.join(" ");
-            }
-          }
-          if (this.ext["AUTH"]) {
-            this.auth = this.ext["AUTH"].split(" ");
-          }
-          this.ext = ext;
-          resolve(data);
-        })
-        .catch(reject);
-    });
+  async ehlo(name) {
+    const { code, message } = await this.cmd(
+      250,
+      "EHLO %s",
+      name || this.localName
+    );
+
+    const ext = {};
+    const extList = message.split("\n");
+    if (extList.length > 1) {
+      if (extList.length > 1) {
+        extList.shift(); // remove first line
+        for (const line of extList) {
+          const [k, ...v] = line.split(" ");
+          ext[k] = v.join(" ");
+        }
+      }
+      if (this.ext["AUTH"]) {
+        this.auth = this.ext["AUTH"].split(" ");
+      }
+      this.ext = ext;
+    }
+
+    return { code, message };
   }
+
+  startTLS(tlsOptions) {}
 
   login(user, password) {}
 
   sendMail(from, to, msg) {}
 
-  quit() {
-    return new Promise((resolve, reject) => {
-      this.cmd(221, "QUIT").then(resolve).catch(reject);
-    });
+  async quit() {
+    return this.cmd(221, "QUIT");
   }
 
   _parseCodeLine(reply, expectCode) {
