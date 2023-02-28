@@ -5,13 +5,16 @@ const { SMTPDisconnected } = require("./error");
 
 class Client {
 
-  constructor(host, port, localName='localhost') {
+  constructor(host, port, localName = "localhost") {
     this.socket = null;
     this.ext = {};
+    this.auth = [];
 
     this.host = host;
     this.port = port;
+
     this.localName = localName;
+    this.didHello = false;
   }
 
   connect(options) {
@@ -68,10 +71,32 @@ class Client {
     });
   }
 
+  hello(name) {
+    return new Promise((resolve, reject) => {
+      if (!this.didHello) {
+        this.ehlo(name).then((resp) => {
+          if (!(200 <= resp.code && resp.code < 300)) {
+            this.helo(name).then((resp2) => {
+              console.log(resp2.code);
+              if (!(200 <= resp2.code && resp2.code < 300)) {
+                reject(new Error("smtp helo error code: " + resp2.code));
+              }
+              resolve();
+            });
+          }
+          resolve();
+        });
+      }
+    });
+  }
+
   helo(name) {
     return new Promise((resolve, reject) => {
       this.cmd(220, "HELO %s", name || this.localName)
-        .then(resolve)
+        .then((data) => {
+          this.didHello = true;
+          resolve(data);
+        })
         .catch(reject);
     });
   }
@@ -79,10 +104,25 @@ class Client {
   ehlo(name) {
     return new Promise((resolve, reject) => {
       this.cmd(250, "EHLO %s", name || this.localName)
-        .then(resolve)
+        .then((data) => {
+          let extList = data.message.split("\n");
+          if (extList.length > 1) {
+            extList = extList.slice(1);
+            for (const line of extList) {
+              const [k, ...v] = line.split(" ");
+              this.ext[k] = v.join(" ");
+            }
+          }
+          this.didHello = true;
+          resolve(data);
+        })
         .catch(reject);
     });
   }
+
+  login(user, password) {}
+
+  sendMail(from, to, msg) {}
 
   quit() {
     return new Promise((resolve, reject) => {

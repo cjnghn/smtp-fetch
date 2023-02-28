@@ -7,8 +7,9 @@ async function main() {
   const client = new Client(GMAIL_SMTP, SMTP_PORT);
   await client.connect();
 
-  console.log(await client.ehlo());
-  console.log(await client.quit());
+  await client.hello();
+  console.log(client.ext)
+  await client.quit();
 
   client.close();
 }
