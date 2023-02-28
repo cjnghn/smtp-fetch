@@ -1,10 +1,9 @@
 const util = require("util");
 const net = require("net");
 const debug = require("debug")("promise-smtp");
-const { SMTPDisconnected } = require("./error");
+const { SMTPError, SMTPServerDisconnected } = require("./error");
 
 class Client {
-
   constructor(host, port, localName = "localhost") {
     this.socket = null;
     this.ext = {};
@@ -18,7 +17,7 @@ class Client {
   }
 
   connect(options) {
-    this.socket = net.connect(this.port, this.host, options);
+    this.socket = net.connect({ port: this.port, host: this.host, ...options });
 
     return new Promise((resolve, reject) => {
       this.socket.on("connect", () => {
@@ -26,6 +25,10 @@ class Client {
           debug("connect success: " + data.toString());
           resolve(this._parseCodeLine(data.toString(), 220));
         });
+      });
+
+      this.socket.on("timeout", () => {
+        this.socket.emit("error", new SMTPError("timeout"));
       });
 
       this.socket.on("error", (err) => {
@@ -37,7 +40,7 @@ class Client {
 
   close() {
     if (!this.socket) {
-      throw new SMTPDisconnected("please run connect() first");
+      throw new SMTPServerDisconnected("please run connect() first");
     }
     this.socket.end();
     this.socket.destroy();
@@ -46,7 +49,7 @@ class Client {
 
   cmd(expectCode, format, ...args) {
     if (!this.socket) {
-      throw new SMTPDisconnected("please run connect() first");
+      throw new SMTPServerDisconnected("please run connect() first");
     }
     const line = util.format(`${format}\r\n`, ...args);
     return new Promise((resolve, reject) => {
@@ -74,6 +77,7 @@ class Client {
   hello(name) {
     return new Promise((resolve, reject) => {
       if (!this.didHello) {
+        this.didHello = true;
         this.ehlo(name).then((resp) => {
           if (!(200 <= resp.code && resp.code < 300)) {
             this.helo(name).then((resp2) => {
@@ -93,10 +97,7 @@ class Client {
   helo(name) {
     return new Promise((resolve, reject) => {
       this.cmd(220, "HELO %s", name || this.localName)
-        .then((data) => {
-          this.didHello = true;
-          resolve(data);
-        })
+        .then(resolve)
         .catch(reject);
     });
   }
@@ -105,15 +106,19 @@ class Client {
     return new Promise((resolve, reject) => {
       this.cmd(250, "EHLO %s", name || this.localName)
         .then((data) => {
-          let extList = data.message.split("\n");
+          const ext = {};
+          const extList = data.message.split("\n");
           if (extList.length > 1) {
-            extList = extList.slice(1);
+            extList.shift(); // remove first line
             for (const line of extList) {
               const [k, ...v] = line.split(" ");
-              this.ext[k] = v.join(" ");
+              ext[k] = v.join(" ");
             }
           }
-          this.didHello = true;
+          if (this.ext["AUTH"]) {
+            this.auth = this.ext["AUTH"].split(" ");
+          }
+          this.ext = ext;
           resolve(data);
         })
         .catch(reject);

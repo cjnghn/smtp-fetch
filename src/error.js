@@ -1,3 +1,5 @@
-class SMTPDisconnected extends Error {}
+class SMTPError extends Error {}
 
-module.exports = { SMTPDisconnected };
+class SMTPServerDisconnected extends SMTPError {}
+
+module.exports = { SMTPError, SMTPServerDisconnected };
