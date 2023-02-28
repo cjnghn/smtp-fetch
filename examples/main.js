@@ -5,9 +5,11 @@ const SMTP_PORT = 25;
 
 async function main() {
   const client = new Client(GMAIL_SMTP, SMTP_PORT);
-  await client.connect({ timeout: 3000 });
+  await client.connect();
+
   await client.hello();
   await client.quit();
+
   client.close();
 }
 

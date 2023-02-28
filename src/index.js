@@ -1,23 +1,29 @@
+'use strict';
+
 const util = require("util");
 const net = require("net");
+const tls = require("tls");
 const debug = require("debug")("promise-smtp");
 const { SMTPError, SMTPServerDisconnected } = require("./error");
 
 class Client {
-  constructor(host, port, localName = "localhost") {
+
+  constructor(host, port, options = {}, localName = "localhost") {
     this.socket = null;
     this.ext = {};
     this.auth = [];
 
     this.host = host;
     this.port = port;
+    this.tls = options.tls || false;
 
     this.localName = localName;
     this.didHello = false;
   }
 
   connect(options) {
-    this.socket = net.connect({ port: this.port, host: this.host, ...options });
+    const selected = this.tls ? tls.connect : net.connect;
+    this.socket = selected({ port: this.port, host: this.host, ...options });
 
     return new Promise((resolve, reject) => {
       this.socket.on("connect", () => {
@@ -42,9 +48,9 @@ class Client {
     if (!this.socket) {
       throw new SMTPServerDisconnected("please run connect() first");
     }
-    this.socket.end();
     this.socket.destroy();
     this.socket = null;
+    debug("close");
   }
 
   cmd(expectCode, format, ...args) {
@@ -52,8 +58,9 @@ class Client {
       throw new SMTPServerDisconnected("please run connect() first");
     }
     const line = util.format(`${format}\r\n`, ...args);
+
     return new Promise((resolve, reject) => {
-      debug("write: " + line);
+      debug("> " + line);
       this.socket.write(line, "utf-8", () => {
         this.socket.once("data", (data) => {
           resolve(this._parseCodeLine(data.toString(), expectCode));
@@ -63,10 +70,16 @@ class Client {
   }
 
   async verify(addr) {
+    // ehlo or ehlo first
+    await this.hello();
+
     return this.cmd(250, "VRFY %s", addr);
   }
 
   async noop() {
+    // ehlo or ehlo first
+    await this.hello();
+
     return this.cmd(250, "NOOP");
   }
 
@@ -93,7 +106,6 @@ class Client {
       "EHLO %s",
       name || this.localName
     );
-
     const ext = {};
     const extList = message.split("\n");
     if (extList.length > 1) {
@@ -113,13 +125,27 @@ class Client {
     return { code, message };
   }
 
-  startTLS(tlsOptions) {}
+  async startTLS(tlsOptions) {
+    // ehlo or ehlo first
+    await this.hello();
 
-  login(user, password) {}
+    const { code, message } = await this.cmd(220, "STARTTLS");
 
-  sendMail(from, to, msg) {}
+    this.tls = true;
+    await this.connect();
 
+    return this.ehlo();
+  }
+
+  async login(user, password) {}
+
+  async sendMail(from, to, msg) {}
+
+  // Quit sends QUIT command and closes the connection to the server.
   async quit() {
+    // ehlo or ehlo first
+    await this.hello();
+
     return this.cmd(221, "QUIT");
   }
 
