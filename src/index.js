@@ -1,12 +1,13 @@
 const util = require("util");
 const net = require("net");
-const debug = require("debug")("client");
-const { SMTPDisconnected } = require('./error')
+const debug = require("debug")("promise-smtp");
+const { SMTPDisconnected } = require("./error");
 
 class Client {
 
   constructor(host, port, localName) {
     this.socket = null;
+    this.ext = {};
 
     this.host = host;
     this.port = port;
@@ -40,16 +41,16 @@ class Client {
     this.socket = null;
   }
 
-  cmd(format, ...args) {
+  cmd(expectCode, format, ...args) {
     if (!this.socket) {
       throw new SMTPDisconnected("please run connect() first");
     }
-    const msg = util.format(`${format}\r\n`, ...args);
-
+    const line = util.format(`${format}\r\n`, ...args);
     return new Promise((resolve, reject) => {
-      this.socket.write(msg, "utf-8", () => {
+      debug('write: ' + line)
+      this.socket.write(line, "utf-8", () => {
         this.socket.once("data", (data) => {
-          resolve(data.toString());
+          resolve(this._parseCodeLine(data.toString(), expectCode));
         });
       });
     });
@@ -57,13 +58,13 @@ class Client {
 
   noop() {
     return new Promise((resolve, reject) => {
-      this.cmd("NOOP").then(resolve).catch(reject);
+      this.cmd(250, "NOOP").then(resolve).catch(reject);
     });
   }
 
   helo(name) {
     return new Promise((resolve, reject) => {
-      this.cmd("HELO %s", name || this.localName)
+      this.cmd(220, "HELO %s", name || this.localName)
         .then(resolve)
         .catch(reject);
     });
@@ -71,10 +72,25 @@ class Client {
 
   ehlo(name) {
     return new Promise((resolve, reject) => {
-      this.cmd("EHLO %s", name || this.localName)
+      this.cmd(250, "EHLO %s", name || this.localName)
         .then(resolve)
         .catch(reject);
     });
+  }
+
+  _parseCodeLine(reply, expectCode) {
+    const lines = reply.split("\r\n");
+    let code;
+    const resp = [];
+    for (const line of lines) {
+      resp.push(line.substring(4).trim());
+      code = parseInt(line.substring(0, 3), 10);
+      if (line.substring(3, 4) != "-") {
+        break;
+      }
+    }
+
+    return { code, message: resp.join('\n') };
   }
 }
 

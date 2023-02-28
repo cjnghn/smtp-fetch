@@ -1,3 +1,3 @@
 class SMTPDisconnected extends Error {}
 
-module.exports = { SMTPDisconnected }
+module.exports = { SMTPDisconnected };
