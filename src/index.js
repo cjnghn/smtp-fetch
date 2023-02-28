@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 const util = require("util");
 const net = require("net");
@@ -6,8 +6,7 @@ const tls = require("tls");
 const debug = require("debug")("promise-smtp");
 const { SMTPError, SMTPServerDisconnected } = require("./error");
 
-class Client {
-
+class SMTP {
   constructor(host, port, options = {}, localName = "localhost") {
     this.socket = null;
     this.ext = {};
@@ -165,4 +164,4 @@ class Client {
   }
 }
 
-module.exports = Client;
+module.exports = SMTP;
