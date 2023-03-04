@@ -1,24 +1,29 @@
-"use strict";
+import * as net from "net";
+import SMTP from "../src/index";
+import { SMTPError } from "../src/error";
 
-const net = require("net");
-const SMTP = require("../src");
-const { SMTPError } = require("../src/error");
+type IMockServer = net.Server & { start: Function; stop: Function };
 
-const DUMMY_PORT = 1025;
+const PORT = 1025;
+const createTestServer = (port: number) => {
+  let server = net.createServer() as IMockServer;
 
-const createTestServer = (port) => {
-  let server = net.createServer();
-  server.start = () => new Promise((r) => server.listen(port, r));
-  server.stop = () => new Promise((r) => server.close(r));
+  server.start = () => {
+    return new Promise((resolve) => server.listen(port, () => resolve(null)));
+  };
+  server.stop = () => {
+    return new Promise((resolve) => server.close(resolve));
+  };
 
   return server;
 };
 
 describe("connect", () => {
-  let client, server;
+  let server: IMockServer;
+  let client: SMTP;
 
   beforeEach(() => {
-    client = new SMTP("127.0.0.1", DUMMY_PORT);
+    client = new SMTP("127.0.0.1", PORT);
   });
 
   afterEach(async () => {
@@ -27,7 +32,7 @@ describe("connect", () => {
   });
 
   it("should connect to the SMTP server", async () => {
-    server = createTestServer(DUMMY_PORT);
+    server = createTestServer(PORT);
     server.on("connection", (sock) => {
       sock.write("220 mx.test.com ESMTP\r\n");
     });
@@ -40,7 +45,7 @@ describe("connect", () => {
   });
 
   it("should throw when not 220", async () => {
-    server = createTestServer(DUMMY_PORT);
+    server = createTestServer(PORT);
     server.on("connection", (sock) => {
       sock.write("300 mx.test.com ESMTP\r\n");
     });
