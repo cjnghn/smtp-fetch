@@ -3,12 +3,11 @@
     /* Visit https://aka.ms/tsconfig.json to read more about this file */
     // Recommended Node options have been incorporated from https://github.com/tsconfig/bases/blob/master/bases/node14.json
 
-    "target": "ES5",
+    "target": "es2020",
     "module": "commonjs",
     "esModuleInterop": true,
 
-    // Overrides default in order to remove "dom" because this package shouldn't assume the presence of browser APIs
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022"],
 
     // Emit location
     "outDir": "dist",
