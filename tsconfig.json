@@ -1,10 +1,38 @@
 {
   "compilerOptions": {
-    "declaration": true,
+    /* Visit https://aka.ms/tsconfig.json to read more about this file */
+    // Recommended Node options have been incorporated from https://github.com/tsconfig/bases/blob/master/bases/node14.json
+
+    "target": "ES5",
+    "module": "commonjs",
     "esModuleInterop": true,
-    "outDir": "./dist",
-    "allowJs": true,
-    "target": "es5"
+
+    // Overrides default in order to remove "dom" because this package shouldn't assume the presence of browser APIs
+    "lib": ["ES2022", "DOM"],
+
+    // Emit location
+    "outDir": "dist",
+
+    // Emit sourcemaps
+    "declarationMap": true,
+    "sourceMap": true,
+    "inlineSources": true,
+
+    // Emit type definitions
+    "declaration": true,
+
+    // Allow import package.json
+    "resolveJsonModule": true,
+
+    // Linter style rules
+    "noUnusedLocals": false, // Disabled because we use eslint for this.
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["./src/**/*"]
+
+  "include": ["src/**/*", "src/index.d.tsd.tssrc/index.d.tsdex.d.ts"]
 }

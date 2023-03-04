@@ -148,17 +148,17 @@ export default class SMTP {
 
   // StartTLS sends the STARTTLS command and encrypts all further communication.
   // Only servers that advertise the STARTTLS extension support this function.
-  public async startTLS(tlsOptions = {}): Promise<IResponse> {
-    // ehlo or ehlo first
-    await this.hello();
+  // public async startTLS(tlsOptions = {}): Promise<IResponse> {
+  //   // ehlo or ehlo first
+  //   await this.hello();
 
-    const { code, message } = await this.cmd(220, "STARTTLS");
+  //   const { code, message } = await this.cmd(220, "STARTTLS");
 
-    this.tls = true;
-    await this.connect();
+  //   this.tls = true;
+  //   await this.connect();
 
-    return this.ehlo();
-  }
+  //   return this.ehlo();
+  // }
 
   // public async login(user: string, password: string): Promise<IResponse> {}
 
