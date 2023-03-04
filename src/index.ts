@@ -1,73 +1,83 @@
-"use strict";
+import * as util from "util";
+import * as net from "net";
+import * as tls from "tls";
+import * as debug from "debug";
 
-const util = require("util");
-const net = require("net");
-const tls = require("tls");
-const debug = require("debug")("smtp");
-const { SMTPError, SMTPServerDisconnected } = require("./error");
+import { SMTPError, SMTPServerDisconnected } from "./error";
 
-class SMTP {
+const log = debug("smtp");
+
+export type ISocket = net.Socket | tls.TLSSocket;
+export type IExtension = { [key: string]: string };
+
+export type IResponse = { code: number; message: string };
+
+export default class SMTP {
   // A Client represents a client connection to an SMTP server.
 
-  constructor(host, port, options = {}, localName = "localhost") {
-    this.socket = null;
-    this.ext = {};
-    this.auth = [];
+  private socket: ISocket | undefined;
+  private ext: IExtension | undefined = {};
+  private auth: string[] | undefined = [];
 
-    this.host = host;
-    this.port = port;
-    this.tls = options.tls || false;
+  private didHello: boolean = false;
 
-    this.localName = localName;
-    this.didHello = false;
-  }
+  constructor(
+    private readonly host: string,
+    private readonly port: number,
+    private tls: boolean = false,
+    private localName = "localhost"
+  ) {}
 
-  connect(options) {
-    const selected = this.tls ? tls.connect : net.connect;
-    this.socket = selected({ port: this.port, host: this.host, ...options });
+  public connect(options = {}): Promise<IResponse> {
+    const select = (this.tls ? tls.connect : net.connect) as Function;
+    this.socket = select({ port: this.port, host: this.host, ...options });
 
     return new Promise((resolve, reject) => {
       this.socket.on("connect", () => {
         this.socket.once("data", (data) => {
           try {
-            debug("connect: " + data.toString());
+            log("connect: " + data.toString());
             resolve(this.parseCodeLine(data.toString(), 220));
           } catch (err) {
-            debug("connect error: " + err.message);
+            log("connect error: " + err.message);
             reject(err);
           }
         });
       });
 
       this.socket.on("timeout", () => {
+        log("timeout error");
         this.socket.emit("error", new SMTPError("timeout"));
       });
 
       this.socket.on("error", (err) => {
-        debug("connect error: ", err);
+        log("connect error: " + err);
         reject(err);
       });
     });
   }
 
   // Close closes the connection.
-  close() {
+  public close() {
     if (!this.socket) {
       throw new SMTPServerDisconnected("please run connect() first");
     }
     this.socket.destroy();
     this.socket = null;
-    debug("close");
   }
 
-  cmd(expectCode, format, ...args) {
+  public cmd(
+    expectCode: number,
+    format: string,
+    ...args: any[]
+  ): Promise<IResponse> {
     if (!this.socket) {
       throw new SMTPServerDisconnected("please run connect() first");
     }
     const line = util.format(`${format}\r\n`, ...args);
 
-    return new Promise((resolve, reject) => {
-      debug("> " + line);
+    return new Promise((resolve) => {
+      log(">> " + line);
       this.socket.write(line, "utf-8", () => {
         this.socket.once("data", (data) => {
           resolve(this.parseCodeLine(data.toString(), expectCode));
@@ -76,14 +86,14 @@ class SMTP {
     });
   }
 
-  async verify(addr) {
+  public async verify(addr: string): Promise<IResponse> {
     // ehlo or ehlo first
     await this.hello();
 
     return this.cmd(250, "VRFY %s", addr);
   }
 
-  async noop() {
+  public async noop(): Promise<IResponse> {
     // ehlo or ehlo first
     await this.hello();
 
@@ -91,7 +101,7 @@ class SMTP {
   }
 
   // hello runs a hello exchange if needed.
-  async hello(name) {
+  public async hello(name: string = "hi") {
     if (!this.didHello) {
       this.didHello = true;
       let resp = await this.ehlo(name);
@@ -106,13 +116,13 @@ class SMTP {
 
   // helo sends the HELO greeting to the server. It should be used only when the
   // server does not support ehlo.
-  async helo(name) {
+  public async helo(name: string = "hi"): Promise<IResponse> {
     return this.cmd(220, "HELO %s", name || this.localName);
   }
 
   // ehlo sends the EHLO (extended hello) greeting to the server. It
   // should be the preferred greeting for servers that support it.
-  async ehlo(name) {
+  public async ehlo(name: string = "hi"): Promise<IResponse> {
     const { code, message } = await this.cmd(
       250,
       "EHLO %s",
@@ -139,7 +149,7 @@ class SMTP {
 
   // StartTLS sends the STARTTLS command and encrypts all further communication.
   // Only servers that advertise the STARTTLS extension support this function.
-  async startTLS(tlsOptions) {
+  public async startTLS(tlsOptions = {}): Promise<IResponse> {
     // ehlo or ehlo first
     await this.hello();
 
@@ -151,21 +161,25 @@ class SMTP {
     return this.ehlo();
   }
 
-  async login(user, password) {}
+  // public async login(user: string, password: string): Promise<IResponse> {}
 
-  async sendMail(from, to, msg) {}
+  // public async sendMail(
+  //   from: string,
+  //   to: string,
+  //   msg: string
+  // ): Promise<IResponse> {}
 
   // Quit sends QUIT command and closes the connection to the server.
-  async quit() {
+  public async quit(): Promise<IResponse> {
     // ehlo or ehlo first
     await this.hello();
 
     return this.cmd(221, "QUIT");
   }
 
-  parseCodeLine(reply, expectCode) {
+  private parseCodeLine(reply: string, expectCode: number): IResponse {
     const lines = reply.split("\r\n");
-    let code;
+    let code: number;
     const resp = [];
     for (const line of lines) {
       resp.push(line.substring(4).trim());
@@ -182,5 +196,3 @@ class SMTP {
     return { code, message: resp.join("\n") };
   }
 }
-
-module.exports = SMTP;
