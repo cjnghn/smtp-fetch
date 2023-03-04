@@ -17,41 +17,43 @@ const createTestServer = (port: number) => {
   return server;
 };
 
-describe("connect", () => {
+describe("SMTP Client", () => {
   let server: IMockServer;
   let client: Client;
 
-  beforeEach(() => {
-    client = new Client("127.0.0.1", PORT);
-  });
-
-  afterEach(async () => {
-    client.close();
-    await server.stop();
-  });
-
-  it("should connect to the SMTP server", async () => {
-    server = createTestServer(PORT);
-    server.on("connection", (sock) => {
-      sock.write("220 mx.test.com ESMTP\r\n");
+  describe("connect", () => {
+    beforeEach(() => {
+      client = new Client("127.0.0.1", PORT);
     });
-    await server.start();
 
-    const result = await client.connect();
-
-    expect(result.code).toBe(220);
-    expect(result.message).toBe("mx.test.com ESMTP");
-  });
-
-  it("should throw when not 220", async () => {
-    server = createTestServer(PORT);
-    server.on("connection", (sock) => {
-      sock.write("300 mx.test.com ESMTP\r\n");
+    afterEach(async () => {
+      client.close();
+      await server.stop();
     });
-    await server.start();
 
-    await expect(client.connect()).rejects.toThrowError(
-      new SMTPError("unexpected code: 300")
-    );
+    it("should connect to the SMTP server", async () => {
+      server = createTestServer(PORT);
+      server.on("connection", (sock) => {
+        sock.write("220 mx.test.com ESMTP\r\n");
+      });
+      await server.start();
+
+      const result = await client.connect();
+
+      expect(result.code).toBe(220);
+      expect(result.message).toBe("mx.test.com ESMTP");
+    });
+
+    it("should throw when not 220", async () => {
+      server = createTestServer(PORT);
+      server.on("connection", (sock) => {
+        sock.write("300 mx.test.com ESMTP\r\n");
+      });
+      await server.start();
+
+      await expect(client.connect()).rejects.toThrowError(
+        new SMTPError("unexpected code: 300")
+      );
+    });
   });
 });
