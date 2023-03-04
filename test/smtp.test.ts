@@ -2,11 +2,11 @@ import * as net from "net";
 import SMTP from "../src/index";
 import { SMTPError } from "../src/error";
 
-type IServer = net.Server & { start: Function; stop: Function };
+type IMockServer = net.Server & { start: Function; stop: Function };
 
 const PORT = 1025;
 const createTestServer = (port: number) => {
-  let server = net.createServer() as IServer;
+  let server = net.createServer() as IMockServer;
 
   server.start = () => {
     return new Promise((resolve) => server.listen(port, () => resolve(null)));
@@ -19,7 +19,7 @@ const createTestServer = (port: number) => {
 };
 
 describe("connect", () => {
-  let server: IServer;
+  let server: IMockServer;
   let client: SMTP;
 
   beforeEach(() => {

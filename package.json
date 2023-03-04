@@ -1,9 +1,11 @@
 {
-  "name": "promise-smtp",
+  "name": "node-smtp",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "license": "MIT",
   "scripts": {
+    "build": "tsc",
     "test": "jest --detectOpenHandles"
   },
   "devDependencies": {

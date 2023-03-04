@@ -1,8 +1,7 @@
-import * as util from "util";
-import * as net from "net";
-import * as tls from "tls";
-import * as debug from "debug";
-
+import util from "util";
+import net from "net";
+import tls from "tls";
+import debug from "debug";
 import { SMTPError, SMTPServerDisconnected } from "./error";
 
 const log = debug("smtp");
