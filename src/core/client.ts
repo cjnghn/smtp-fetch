@@ -2,7 +2,7 @@ import util from "util";
 import net from "net";
 import tls from "tls";
 import debug from "debug";
-import { SMTPError, SMTPServerDisconnected } from "./errors";
+import { SMTPError, SMTPDisconnectedError } from "./errors";
 
 const log = debug("smtp");
 
@@ -12,24 +12,25 @@ export type IExtension = { [key: string]: string };
 export type IResponse = { code: number; message: string };
 
 export default class SMTP {
-  // A Client represents a client connection to an SMTP server.
+  /**
+   * A Client represents a client connection to an SMTP.
+   */
 
   private socket: ISocket | undefined;
   private ext: IExtension | undefined = {};
   private auth: string[] | undefined = [];
+  private tls: boolean = false;
 
   private didHello: boolean = false;
 
   constructor(
     private readonly host: string,
     private readonly port: number,
-    private tls: boolean = false,
-    private localName = "localhost"
+    private readonly localName = "localhost"
   ) {}
 
-  public connect(options = {}): Promise<IResponse> {
-    const select = (this.tls ? tls.connect : net.connect) as Function;
-    this.socket = select({ port: this.port, host: this.host, ...options });
+  public async connect(options = {}): Promise<IResponse> {
+    this.socket = net.connect({ port: this.port, host: this.host, ...options });
 
     return new Promise((resolve, reject) => {
       this.socket.on("connect", () => {
@@ -59,27 +60,32 @@ export default class SMTP {
   // Close closes the connection.
   public close() {
     if (!this.socket) {
-      throw new SMTPServerDisconnected("please run connect() first");
+      throw new SMTPDisconnectedError("please run connect() first");
     }
     this.socket.destroy();
     this.socket = null;
   }
 
-  public cmd(
+  public async cmd(
     expectCode: number,
     format: string,
     ...args: any[]
   ): Promise<IResponse> {
     if (!this.socket) {
-      throw new SMTPServerDisconnected("please run connect() first");
+      throw new SMTPDisconnectedError("please run connect() first");
     }
     const line = util.format(`${format}\r\n`, ...args);
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       log(">> " + line);
       this.socket.write(line, "utf-8", () => {
         this.socket.once("data", (data) => {
-          resolve(this.parseCodeLine(data.toString(), expectCode));
+          try {
+            log(data.toString());
+            resolve(this.parseCodeLine(data.toString(), expectCode));
+          } catch (err) {
+            reject(err);
+          }
         });
       });
     });
@@ -97,6 +103,18 @@ export default class SMTP {
     await this.hello();
 
     return this.cmd(250, "NOOP");
+  }
+
+  public async mail(from: string) {
+    // ehlo or ehlo first
+    await this.hello();
+
+    return this.cmd(250, "MAIL FROM:<%s>", from);
+  }
+
+  // run rcpt command
+  public async rcpt(to: string) {
+    return this.cmd(250, "RCPT TO:<%s>", to);
   }
 
   // hello runs a hello exchange if needed.
@@ -134,7 +152,7 @@ export default class SMTP {
         extList.shift(); // remove first line
         for (const line of extList) {
           const [k, ...v] = line.split(" ");
-          ext[k] = v.join(" ");
+          ext[k] = v.join(" ").toLowerCase();
         }
       }
       if (this.ext["AUTH"]) {
@@ -146,19 +164,35 @@ export default class SMTP {
     return { code, message };
   }
 
+  /*TODO - TLS Support
   // StartTLS sends the STARTTLS command and encrypts all further communication.
   // Only servers that advertise the STARTTLS extension support this function.
-  // public async startTLS(tlsOptions = {}): Promise<IResponse> {
-  //   // ehlo or ehlo first
-  //   await this.hello();
+  public async startTLS(): Promise<IResponse> {
+    // ehlo or ehlo first
+    await this.hello();
+    if (!this.hasExt("starttls")) {
+      throw new SMTPNotSupportedError(
+        "STARTTLS extension not supported by server."
+      );
+    }
 
-  //   const { code, message } = await this.cmd(220, "STARTTLS");
+    const { code, message } = await this.cmd(220, "STARTTLS");
 
-  //   this.tls = true;
-  //   await this.connect();
+    this.tls = true;
+    return this.ehlo();
+  }
 
-  //   return this.ehlo();
-  // }
+  private async wrapSSL(
+    socket: net.Socket,
+    tlsOptions: tls.ConnectionOptions = {}
+  ): Promise<tls.TLSSocket> {
+    return new Promise((resolve, reject) => {
+      this.socket.removeAllListeners("close");
+
+      this.socket = tls.connect({});
+    });
+  }
+  */
 
   // public async login(user: string, password: string): Promise<IResponse> {}
 
@@ -189,9 +223,13 @@ export default class SMTP {
     }
 
     if (expectCode !== code) {
-      throw new SMTPError("unexpected code: " + code);
+      throw new SMTPError("unexpected code: " + code + ": " + resp.join("/"));
     }
 
     return { code, message: resp.join("\n") };
+  }
+
+  private hasExt(opt: string): boolean {
+    return opt.toLowerCase() in this.ext;
   }
 }

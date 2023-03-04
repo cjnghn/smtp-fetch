@@ -1,3 +1,7 @@
 export class SMTPError extends Error {}
 
-export class SMTPServerDisconnected extends SMTPError {}
+export class SMTPDisconnectedError extends SMTPError {}
+
+export class SMTPNotSupportedError extends SMTPError {}
+
+export class SMTPResponseException extends SMTPError {}
