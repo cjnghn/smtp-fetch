@@ -1,6 +1,5 @@
 import * as net from "net";
-import SMTP from "../src/index";
-import { SMTPError } from "../src/error";
+import { Client, SMTPError } from "../src/index";
 
 type IMockServer = net.Server & { start: Function; stop: Function };
 
@@ -20,10 +19,10 @@ const createTestServer = (port: number) => {
 
 describe("connect", () => {
   let server: IMockServer;
-  let client: SMTP;
+  let client: Client;
 
   beforeEach(() => {
-    client = new SMTP("127.0.0.1", PORT);
+    client = new Client("127.0.0.1", PORT);
   });
 
   afterEach(async () => {
